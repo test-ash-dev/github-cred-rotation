@@ -26,8 +26,6 @@ for x in $WORKSPACES; do
   NAME=$(echo $x | jq -r '.workspace')
   REPO=$(echo $x | jq -r '.repo')
 
-  printf "Updating workspace source VCS to CLI for workspace" $NAME
-
   printf "Setting VCS connection for %s to %s \n" $NAME $REPO
 
   PAYLOAD='{"data":{"attributes":{"vcs-repo":{"identifier":"'$REPO'","oauth-token-id":"'$OAUTH_TOKEN'"}},"type":"workspaces"}}'
