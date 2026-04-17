@@ -1,0 +1,50 @@
+#!/bin/bash
+
+## Pass the input file to the script or exit
+INPUT_FILE=$1
+if [[ -z $INPUT_FILE ]]; then
+  echo "Usage: $0 file-to-read"
+  exit 1
+fi
+
+## Make sure all of the required variables are set.
+if [ -z $TOKEN ] || [ -z $HOSTNAME ] || [ -z $ORG_NAME ] || [ -z $OAUTH_TOKEN ]; then
+  printf "Please make sure the following environment variables are set:\n\n"
+  printf "%-13s %s\n" \
+    "TOKEN" "A user token with the appropriate permissions to alter a workspace's VCS settings" \
+    "HOSTNAME" "The hostname of your Terraform Enterprise instance" \
+    "ORG_NAME" "The organization that the workspaces exists in" \
+    "OAUTH_TOKEN" "The OAuth token of the VCS connection. Can be found in the organization's VCS settings"
+  exit 1
+fi
+
+## Break the input file into individual flat objects
+WORKSPACES=$(jq -c '.[]' $INPUT_FILE)
+
+## Iterate over the lines, making the appropriate API call
+for x in $WORKSPACES; do
+  NAME=$(echo $x | jq -r '.workspace')
+  REPO=$(echo $x | jq -r '.repo')
+
+  printf "Setting VCS connection for %s to %s \n" $NAME $REPO
+
+  PAYLOAD='{"data":{"attributes":{"vcs-repo":{"identifier":"'$REPO'","oauth-token-id":"'$OAUTH_TOKEN'"}},"type":"workspaces"}}'
+
+  ## Capture and parse the response, looking for the VCS repo identifier.
+  ## This allows us to compare the expected result to the *actual* result.
+  RESPONSE=$(curl -s \
+    --header "Authorization: Bearer $TOKEN" \
+    --header "Content-Type: application/vnd.api+json" \
+    --request PATCH \
+    --data "$PAYLOAD" \
+    "https://$HOSTNAME/api/v2/organizations/$ORG_NAME/workspaces/$NAME")
+
+  PARSED_RESPONSE=$(echo $RESPONSE | jq -r '.data.attributes."vcs-repo".identifier')
+
+  ## Report back whether expectation == reality
+  if [[ $PARSED_RESPONSE == $REPO ]]; then
+    printf "Success! \n \n"
+  else
+    printf "Something went wrong: $RESPONSE \n \n"
+  fi
+done
